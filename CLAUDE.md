@@ -8,6 +8,8 @@ Cuando el usuario pase pantallazos de *Tiempo de uso* del iPhone (vista de un d�
 4. `git add docs/datos.enc && git commit -m "Datos AAAA-MM-DD" && git push`. La web se actualiza en 1-2 minutos.
 5. Resume al usuario en 2-3 líneas el día: total, semáforo y qué norma se ha pasado.
 
+Origen de los pantallazos: Google Drive del usuario (conector de Google Drive), carpeta «Uso móvil» (id `1lrRldnpUHqCeuox2KUzTIZgz0mJuHzD0`). Busca las imágenes con `parentId = '<id>'`, descárgalas y, tras publicar, muévelas a «Procesados» (id `15UjVC7aHUyp9dxFrIz6T3AzHXEApjrOD`). Si un día solo tiene un pantallazo, procésalo igual y avisa de lo que falta. También puede pegarlos directamente en el chat.
+
 Reglas:
 - **Nunca** subas `privado/` ni escribas la contraseña o los datos en claro en el repositorio (es público). Tampoco nombres ni correos.
 - Si `privado/datos.json` no existe (otro equipo), recupéralo: `node tools/publicar.mjs --descifrar` (necesita `privado/clave.txt` o `CLAVE`).
