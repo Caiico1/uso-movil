@@ -23,11 +23,12 @@ function validar(datos) {
     vistas.add(d.fecha);
     if (typeof d.total !== 'number') errores.push(`${d.fecha}: falta total`);
     const suma = o => Object.values(o || {}).reduce((a, b) => a + b, 0);
-    // iPhone solo muestra las 3 categorías principales: el resto se ve en la web como "Otras"
-    if (d.categorias && suma(d.categorias) > d.total + 5) errores.push(`${d.fecha}: categorías suman ${suma(d.categorias)} y el total es ${d.total}`);
-    if (d.apps && suma(d.apps) > d.total + 5) errores.push(`${d.fecha}: las apps suman más que el total`);
+    // El total del día es la suma de las categorías que muestra el iPhone; el total del iPhone va en total_iphone
+    if (d.categorias && Math.abs(suma(d.categorias) - d.total) > 1) errores.push(`${d.fecha}: el total (${d.total}) debe ser la suma de las categorías (${suma(d.categorias)})`);
+    const tIphone = d.total_iphone ?? d.total;
+    if (d.apps && suma(d.apps) > tIphone + 5) errores.push(`${d.fecha}: las apps suman más que el total del iPhone`);
     if (d.horas && d.horas.length !== 24) errores.push(`${d.fecha}: 'horas' debe tener 24 valores`);
-    if (d.horas && Math.abs(suma(d.horas) - d.total) > 20) console.warn(`aviso ${d.fecha}: horas suman ${suma(d.horas)} frente a total ${d.total}`);
+    if (d.horas && Math.abs(suma(d.horas) - tIphone) > 20) console.warn(`aviso ${d.fecha}: horas suman ${suma(d.horas)} frente a ${tIphone} del iPhone`);
   }
   if (errores.length) throw new Error('Datos no válidos:\n- ' + errores.join('\n- '));
   datos.dias.sort((a, b) => a.fecha.localeCompare(b.fecha));

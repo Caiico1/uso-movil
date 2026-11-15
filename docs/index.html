@@ -16,7 +16,7 @@
   --accent: #2a78d6;
   --c-social: #2a78d6; --c-entretenimiento: #eb6834; --c-utilidades: #1baf7a;
   --c-productividad: #eda100; --c-educacion: #e87ba4; --c-juegos: #008300; --c-creatividad: #6250d6;
-  --c-otras: #b5b3ab; --c-sin: #d9d7cf; --c-sinapp: #7d7b74;
+  --c-otras: #b5b3ab; --c-sin: #d9d7cf;
   --ok: #0ca30c; --ok-text: #006300; --ambar: #fab219; --ambar-text: #8a5a00; --rojo: #d03b3b; --rojo-text: #b02a2a;
   --seq-0: #f0efec; --seq-1: #cde2fb; --seq-2: #9ec5f4; --seq-3: #6da7ec; --seq-4: #3987e5; --seq-5: #256abf; --seq-6: #184f95; --seq-7: #0d366b;
 }
@@ -29,7 +29,7 @@
     --accent: #3987e5;
     --c-social: #3987e5; --c-entretenimiento: #d95926; --c-utilidades: #199e70;
     --c-productividad: #c98500; --c-educacion: #d55181; --c-juegos: #0ca30c; --c-creatividad: #9085e9;
-    --c-otras: #6b6a65; --c-sin: #3e3e3b; --c-sinapp: #a8a69e;
+    --c-otras: #6b6a65; --c-sin: #3e3e3b;
     --ok-text: #0ca30c; --ambar-text: #fab219; --rojo-text: #e66767;
     --seq-0: #262624; --seq-1: #0d366b; --seq-2: #104281; --seq-3: #184f95; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #9ec5f4;
   }
@@ -42,7 +42,7 @@
   --accent: #3987e5;
   --c-social: #3987e5; --c-entretenimiento: #d95926; --c-utilidades: #199e70;
   --c-productividad: #c98500; --c-educacion: #d55181; --c-juegos: #0ca30c; --c-creatividad: #9085e9;
-  --c-otras: #6b6a65; --c-sin: #3e3e3b; --c-sinapp: #a8a69e;
+  --c-otras: #6b6a65; --c-sin: #3e3e3b;
   --ok-text: #0ca30c; --ambar-text: #fab219; --rojo-text: #e66767;
   --seq-0: #262624; --seq-1: #0d366b; --seq-2: #104281; --seq-3: #184f95; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #9ec5f4;
 }
@@ -205,6 +205,15 @@ const REPO = 'Caiico1/uso-movil';
 const ICONO = { ok: '✓', ambar: '!', rojo: '✕', sin_datos: '?' };
 const CAT_ORDEN = ['Social', 'Entretenimiento', 'Utilidades', 'Productividad', 'Educación', 'Juegos', 'Creatividad'];
 const CAT_VAR = { 'Social': '--c-social', 'Entretenimiento': '--c-entretenimiento', 'Utilidades': '--c-utilidades', 'Productividad': '--c-productividad', 'Educación': '--c-educacion', 'Juegos': '--c-juegos', 'Creatividad': '--c-creatividad' };
+// Color fijo de cada app; las que entren por pasar el umbral toman los colores libres, por orden alfabético
+const APP_VAR = { 'Instagram': '--c-social', 'TikTok': '--c-entretenimiento', 'WhatsApp': '--c-utilidades', 'Spotify': '--c-productividad', 'ChatGPT': '--c-educacion' };
+const APP_LIBRES = ['--c-juegos', '--c-creatividad'];
+function colorApp(app, extra = []) {
+  if (app === 'Otras apps') return css('--c-otras');
+  if (APP_VAR[app]) return css(APP_VAR[app]);
+  const i = [...extra].sort().indexOf(app);
+  return css(APP_LIBRES[i] || '--c-otras');
+}
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
@@ -297,11 +306,8 @@ function pintarDia(fecha) {
   const ev = evaluarDia(u, POR_FECHA, NORMAS);
   const esUltimo = i === dias.length - 1;
   const opciones = [...dias].reverse().map(d => `<option value="${d.fecha}"${d.fecha === fecha ? ' selected' : ''}>${fechaLarga(d.fecha)}</option>`).join('');
-  const h1 = huecos(u);
   const cats = u.categorias ? [...CAT_ORDEN.filter(c => u.categorias[c]).map(c => [c, u.categorias[c], css(CAT_VAR[c])]),
-    ...Object.entries(u.categorias).filter(([c]) => !CAT_ORDEN.includes(c)).map(([c, m]) => [c, m, css('--c-otras')]),
-    ...(h1.otras > 0 ? [['Otras', h1.otras, css('--c-otras')]] : []),
-    ...(h1.sinApp > 0 ? [[SIN_APP, h1.sinApp, css('--c-sinapp')]] : [])] : [];
+    ...Object.entries(u.categorias).filter(([c]) => !CAT_ORDEN.includes(c)).map(([c, m]) => [c, m, css('--c-otras')])] : [];
   const seg1 = appsSeguimiento([u], NORMAS);
   const apps = u.apps ? [...seg1.apps.filter(([a, m]) => m > 0 || NORMAS.limites?.apps?.[a]), ...(seg1.otras > 0 ? [[OTRAS_APPS, seg1.otras]] : [])] : [];
   const maxApp = Math.max(1, ...apps.map(x => x[1]));
@@ -320,11 +326,10 @@ function pintarDia(fecha) {
     ${u.nota ? `<p class="sub" style="margin-top:8px">Nota: ${u.nota}</p>` : ''}
     ${cats.length ? `<h3>Por categoría</h3>
       <div class="catbar">${cats.map(([c, m, col]) => `<span style="flex:${m};background:${col}" title="${c}: ${fmtMin(m)}"></span>`).join('')}</div>
-      <div class="legend">${cats.map(([c, m, col]) => `<span><i style="background:${col}"></i>${c} ${fmtMin(m)}</span>`).join('')}</div>
-      ${h1.sinApp > 0 ? `<p class="sub" style="margin-top:6px">${SIN_APP}: tiempo con la pantalla encendida fuera de las apps (notificaciones, pantalla de bloqueo o de inicio, cambiar de app). Cuenta en el total.</p>` : ''}` : ''}
+      <div class="legend">${cats.map(([c, m, col]) => `<span><i style="background:${col}"></i>${c} ${fmtMin(m)}</span>`).join('')}</div>` : ''}
     ${apps.length ? `<h3>Aplicaciones</h3><ul class="apps">${apps.map(([a, m]) => {
       const lim = limApp(a), pasa = lim != null && m > lim;
-      return `<li><span${a === OTRAS_APPS ? ' class="muted"' : ''}>${a}</span><span class="barra"><b style="width:${Math.max(2, m / maxApp * 100)}%${a === OTRAS_APPS ? ';background:var(--c-otras)' : ''}"></b></span><span class="val${pasa ? ' t-rojo' : ''}">${fmtMin(m)}${lim != null ? `<span class="lim"> / ${fmtMin(lim)}</span>` : ''}</span></li>`; }).join('')}</ul>` : ''}
+      return `<li><span${a === OTRAS_APPS ? ' class="muted"' : ''}>${a}</span><span class="barra"><b style="width:${Math.max(2, m / maxApp * 100)}%;background:${colorApp(a, seg1.extra)}"></b></span><span class="val${pasa ? ' t-rojo' : ''}">${fmtMin(m)}${lim != null ? `<span class="lim"> / ${fmtMin(lim)}</span>` : ''}</span></li>`; }).join('')}</ul>` : ''}
     ${u.horas ? `<h3>Por horas</h3><div class="chart-box mini"><canvas id="g-horas-dia" aria-label="Minutos por hora del día"></canvas></div>
       <div class="legend"><span><i style="background:var(--c-social)"></i>Día</span><span><i style="background:var(--rojo)"></i>Horario nocturno</span></div>` : ''}`;
   $('#sel-dia').onchange = e => seleccionarDia(e.target.value);
@@ -422,16 +427,6 @@ function lineaLimite(dias, clave) {
            pointRadius: 0, stepped: 'middle', stack: 'limite', order: -1, fill: false };
 }
 
-// Tiempo con la pantalla encendida que no es de ninguna app (notificaciones, pantalla de inicio…)
-// y resto de categorías que el iPhone no muestra. Solo se separan si el día tiene categorías y apps.
-const SIN_APP = 'Sin app';
-function huecos(d) {
-  if (!d.categorias) return { otras: 0, sinApp: 0 };
-  const resto = Math.max(0, d.total - Object.values(d.categorias).reduce((a, b) => a + b, 0));
-  if (!d.apps) return { otras: resto, sinApp: 0 };
-  const sinApp = Math.min(resto, Math.max(0, d.total - Object.values(d.apps).reduce((a, b) => a + b, 0)));
-  return { otras: resto - sinApp, sinApp };
-}
 const media = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const AGRUPAR_DESDE = 45;   // con un tramo de más días que esto, las barras van por semanas
 const MESES_DESDE = 200;    // y con más de esto, por meses
@@ -477,16 +472,17 @@ function pintarPeriodo() {
     return `Media: ${fmtMin(media(g.dias.map(d => d.total)))}/día · ${g.dias.length} día${g.dias.length > 1 ? 's' : ''} con datos`;
   };
 
-  // 1. Tiempo por categoría
-  $('#sub-diario').textContent = `${unidad}. La línea discontinua es el límite de referencia${semanal ? ` (media de ${modo === 'mes' ? 'el mes' : 'la semana'})` : ' (cambia en fin de semana)'}. Pulsa una barra para ver ${semanal ? `el último día de ${modo === 'mes' ? 'ese mes' : 'esa semana'}` : 'ese día'} en detalle. «${SIN_APP}» es el tiempo con la pantalla encendida fuera de las apps (notificaciones, pantalla de inicio…).`;
-  $('#tit-diario').textContent = modo === 'mes' ? 'Tiempo por mes y categoría' : semanal ? 'Tiempo por semana y categoría' : 'Tiempo diario por categoría';
+  // 1. Tiempo por app (apps en seguimiento + «Otras apps»)
+  $('#sub-diario').textContent = `${unidad}. La línea discontinua es el límite de referencia${semanal ? ` (media de ${modo === 'mes' ? 'el mes' : 'la semana'})` : ' (cambia en fin de semana)'}. Pulsa una barra para ver ${semanal ? `el último día de ${modo === 'mes' ? 'ese mes' : 'esa semana'}` : 'ese día'} en detalle.`;
+  $('#tit-diario').textContent = modo === 'mes' ? 'Tiempo por mes y app' : semanal ? 'Tiempo por semana y app' : 'Tiempo diario por app';
 
   const serie = f => grupos.map(g => media(g.dias.map(f)) ?? 0);
-  const cats = CAT_ORDEN.filter(c => dias.some(d => d.categorias?.[c]));
-  const ds = cats.map(c => ({ label: c, data: serie(d => d.categorias?.[c] ?? 0), backgroundColor: css(CAT_VAR[c]) }));
-  ds.push({ label: 'Otras', data: serie(d => huecos(d).otras), backgroundColor: css('--c-otras') });
-  ds.push({ label: SIN_APP, data: serie(d => huecos(d).sinApp), backgroundColor: css('--c-sinapp') });
-  ds.push({ label: 'Sin desglose', data: serie(d => d.categorias ? 0 : d.total), backgroundColor: css('--c-sin') });
+  const seg = appsSeguimiento(dias, NORMAS);
+  const enLista = new Set(seg.apps.map(x => x[0]));
+  const valorApp = (d, app) => !d.apps ? null : app === OTRAS_APPS
+    ? Object.entries(d.apps).filter(([a]) => !enLista.has(a)).reduce((s, [, m]) => s + m, 0) : (d.apps[app] ?? 0);
+  const ds = [...enLista, OTRAS_APPS].map(a => ({ label: a, data: serie(d => valorApp(d, a) ?? 0), backgroundColor: colorApp(a, seg.extra) }));
+  ds.push({ label: 'Sin desglose', data: serie(d => d.apps ? 0 : d.total), backgroundColor: css('--c-sin') });
   ds.forEach(x => Object.assign(x, { borderColor: css('--surface'), borderWidth: { top: 2 }, borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }));
   ds.push(lineaLimiteG(grupos, 'total'));
   const usadas = ds.filter(x => x.label === 'Límite' || x.data.some(v => v));
@@ -498,12 +494,8 @@ function pintarPeriodo() {
 
   // 2. Por app
   // Solo las apps en seguimiento (fijas + las que pasan el umbral de media diaria); el resto, «Otras apps»
-  const seg = appsSeguimiento(dias, NORMAS);
   const medias = Object.fromEntries([...seg.apps, [OTRAS_APPS, seg.otras]]);
-  const enLista = new Set(seg.apps.map(x => x[0]));
   const apps = seg.dias ? [...enLista, OTRAS_APPS] : [];
-  const valorApp = (d, app) => !d.apps ? null : app === OTRAS_APPS
-    ? Object.entries(d.apps).filter(([a]) => !enLista.has(a)).reduce((s, [, m]) => s + m, 0) : (d.apps[app] ?? 0);
   const sel = $('#sel-app'), previa = store.get('app') || sel.value || apps[0];
   sel.innerHTML = apps.map(a => `<option>${a}</option>`).join('');
   sel.value = apps.includes(previa) ? previa : apps[0] || '';
@@ -511,7 +503,7 @@ function pintarPeriodo() {
   const pintarApp = () => {
     const app = sel.value; store.set('app', app);
     const valores = grupos.map(g => media(g.dias.map(d => valorApp(d, app))));
-    const set = [{ label: app, data: valores, backgroundColor: css(app === OTRAS_APPS ? '--c-otras' : '--c-social'), borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }];
+    const set = [{ label: app, data: valores, backgroundColor: colorApp(app, seg.extra), borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }];
     const tieneLim = NORMAS.limites?.apps?.[app];
     if (tieneLim) set.push(lineaLimiteG(grupos, 'app:' + app));
     charts.app?.destroy();
@@ -542,7 +534,7 @@ function pintarPeriodo() {
     const lin = [` ${fmtMin(c.raw)} al día`];
     if (d != null && Math.abs(d) >= 1) lin.push(` ${d > 0 ? '▲' : '▼'} ${fmtMin(Math.abs(d))}/día frente al periodo anterior`);
     return lin; } };
-  if (top.length) charts.top = new Chart($('#g-top'), { type: 'bar', data: { labels: top, datasets: [{ data: top.map(a => medias[a]), backgroundColor: top.map(a => css(a === OTRAS_APPS ? '--c-otras' : '--c-social')), borderRadius: 4, borderSkipped: 'left', maxBarThickness: 22 }] }, options: optTop });
+  if (top.length) charts.top = new Chart($('#g-top'), { type: 'bar', data: { labels: top, datasets: [{ data: top.map(a => medias[a]), backgroundColor: top.map(a => colorApp(a, seg.extra)), borderRadius: 4, borderSkipped: 'left', maxBarThickness: 22 }] }, options: optTop });
   const cambios = top.map(a => [a, delta(a)]).filter(([, d]) => d != null && Math.abs(d) >= 5);
   $('#ley-top').innerHTML = !periodo ? '<span class="muted">Con «Todo el historial» no hay periodo anterior con el que comparar.</span>'
     : !previos.length ? `<span class="muted">Sin datos de los ${periodo} días anteriores al periodo para comparar.</span>`
@@ -557,16 +549,15 @@ function pintarPeriodo() {
   const filas = [...dias].reverse().map(d => {
     const e = evaluarDia(d, POR_FECHA, NORMAS);
     const n = e.checks.find(c => c.clave === 'noche');
-    const soc = d.categorias?.Social;
-    const topApp = d.apps ? Object.entries(d.apps).sort((a, b) => b[1] - a[1])[0] : null;
+    const ap = a => d.apps ? fmtMin(d.apps[a] ?? 0) : '—';
     return `<tr data-fecha="${d.fecha}"${d.fecha === diaSel ? ' class="sel"' : ''}><td>${fechaCorta(d.fecha)}${e.tipo === 'fin_de_semana' ? ' <span class="badge">finde</span>' : ''}</td>
       <td class="n">${fmtMin(d.total)}${d.aprox ? ' <span class="badge">≈</span>' : ''}</td>
-      <td class="n">${soc == null ? '—' : fmtMin(soc)}</td>
-      <td>${topApp ? `${topApp[0]} ${fmtMin(topApp[1])}` : '—'}</td>
+      <td class="n">${ap('Instagram')}</td>
+      <td class="n">${ap('TikTok')}</td>
       <td class="n">${n?.valor == null ? '—' : fmtMin(n.valor)}</td>
       <td><span class="dot ${e.nivel}" aria-hidden="true">${ICONO[e.nivel]}</span> <span class="t-${e.nivel}">${ETIQUETA_NIVEL[e.nivel]}</span></td></tr>`;
   }).join('');
-  $('#tabla').innerHTML = `<thead><tr><th>Día</th><th style="text-align:right">Total</th><th style="text-align:right">Social</th><th>App principal</th><th style="text-align:right">Noche</th><th>Estado</th></tr></thead><tbody>${filas}</tbody>`;
+  $('#tabla').innerHTML = `<thead><tr><th>Día</th><th style="text-align:right">Total</th><th style="text-align:right">Instagram</th><th style="text-align:right">TikTok</th><th style="text-align:right">Noche</th><th>Estado</th></tr></thead><tbody>${filas}</tbody>`;
   $('#tabla').onclick = e => { const tr = e.target.closest('tr[data-fecha]'); if (tr) seleccionarDia(tr.dataset.fecha, true); };
 }
 
