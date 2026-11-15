@@ -3,9 +3,7 @@
   "dias_fin_de_semana": [6, 7],
   "limites": {
     "total": { "lectivo": 180, "fin_de_semana": 240 },
-    "categorias": {
-      "Social": { "lectivo": 90, "fin_de_semana": 150 }
-    },
+    "categorias": {},
     "apps": {
       "Instagram": { "lectivo": 60, "fin_de_semana": 90 },
       "TikTok": { "lectivo": 30, "fin_de_semana": 60 },
