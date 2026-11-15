@@ -68,6 +68,22 @@ h2 { font-size: 16px; margin: 0 0 2px; }
 .dot.ok { background: var(--ok); } .dot.ambar { background: var(--ambar); color: #0b0b0b; } .dot.rojo { background: var(--rojo); } .dot.sin_datos { background: var(--axis); }
 .t-ok { color: var(--ok-text); } .t-ambar { color: var(--ambar-text); } .t-rojo { color: var(--rojo-text); } .t-sin_datos { color: var(--muted); }
 .checks { list-style: none; padding: 0; margin: 12px 0 0; }
+h3 { font-size: 13px; color: var(--ink-2); margin: 18px 0 6px; font-weight: 600; }
+.dia-nav { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.dia-nav select { flex: 1; min-width: 0; font-weight: 600; }
+.nav { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; flex: none; }
+.nav:disabled { opacity: .35; cursor: default; }
+.catbar { display: flex; gap: 2px; height: 12px; border-radius: 4px; overflow: hidden; }
+.apps { list-style: none; padding: 0; margin: 0; }
+.apps li { display: grid; grid-template-columns: minmax(70px, 30%) 1fr auto; gap: 10px; align-items: center; padding: 4px 0; font-size: 14px; }
+.apps .barra { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.apps .barra b { display: block; height: 100%; background: var(--c-social); border-radius: 4px; }
+.apps .val { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.apps .lim { color: var(--muted); font-size: 12px; }
+.chart-box.mini { height: 150px; }
+#tabla tbody tr { cursor: pointer; }
+#tabla tbody tr:hover { background: var(--surface-2); }
+#tabla tbody tr.sel { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
 .checks li { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--grid); font-size: 14px; }
 .checks .val { font-variant-numeric: tabular-nums; text-align: right; }
 .checks .lim { color: var(--muted); font-size: 12px; }
@@ -145,7 +161,7 @@ a { color: var(--accent); }
 
   <section class="card">
     <h2>Tiempo diario por categoría</h2>
-    <p class="sub">Minutos al día. La línea discontinua es el límite de referencia (cambia en fin de semana).</p>
+    <p class="sub">Minutos al día. La línea discontinua es el límite de referencia (cambia en fin de semana). Pulsa una barra para ver ese día en detalle.</p>
     <div class="chart-box"><canvas id="g-diario" aria-label="Tiempo diario por categoría"></canvas></div>
     <div class="legend" id="ley-diario"></div>
   </section>
@@ -200,7 +216,7 @@ const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 
-let DATOS, NORMAS, POR_FECHA, periodo = Number(store.get('periodo') ?? 28);
+let DATOS, NORMAS, POR_FECHA, diaSel = null, periodo = Number(store.get('periodo') ?? 28);
 const charts = {};
 
 async function cargar(clave) {
@@ -260,17 +276,78 @@ function pintarFijo() {
   const act = DATOS.actualizado ? new Date(DATOS.actualizado).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '';
   $('#actualizado').textContent = `Datos hasta el ${fechaLarga(u.fecha)}${act ? ' · actualizado ' + act : ''}`;
 
+  if (!POR_FECHA[diaSel]) diaSel = u.fecha;
+  pintarDia(diaSel);
+  pintarNormas();
+}
+
+// ---------- detalle de un día ----------
+function seleccionarDia(fecha, desplazar) {
+  diaSel = fecha;
+  pintarDia(fecha);
+  document.querySelectorAll('#tabla tbody tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.fecha === fecha));
+  if (desplazar) $('#ultimo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function pintarDia(fecha) {
+  const dias = DATOS.dias, i = dias.findIndex(d => d.fecha === fecha), u = dias[i];
   const ev = evaluarDia(u, POR_FECHA, NORMAS);
+  const esUltimo = i === dias.length - 1;
+  const opciones = [...dias].reverse().map(d => `<option value="${d.fecha}"${d.fecha === fecha ? ' selected' : ''}>${fechaLarga(d.fecha)}</option>`).join('');
+  const sumaCat = Object.values(u.categorias || {}).reduce((a, b) => a + b, 0);
+  const cats = u.categorias ? [...CAT_ORDEN.filter(c => u.categorias[c]).map(c => [c, u.categorias[c], css(CAT_VAR[c])]),
+    ...Object.entries(u.categorias).filter(([c]) => !CAT_ORDEN.includes(c)).map(([c, m]) => [c, m, css('--c-otras')]),
+    ...(u.total - sumaCat > 0 ? [['Otras', u.total - sumaCat, css('--c-otras')]] : [])] : [];
+  const apps = Object.entries(u.apps || {}).sort((a, b) => b[1] - a[1]);
+  const maxApp = apps[0]?.[1] || 1;
+  const limApp = a => NORMAS.limites?.apps?.[a]?.[ev.tipo];
   $('#ultimo').innerHTML = `
-    <p class="sub">Último día · ${fechaLarga(u.fecha)} · ${ev.tipo === 'lectivo' ? 'día lectivo' : 'fin de semana'}</p>
+    <div class="dia-nav">
+      <button class="nav" id="dia-prev" aria-label="Día anterior" ${i === 0 ? 'disabled' : ''}>‹</button>
+      <select id="sel-dia" aria-label="Elegir día">${opciones}</select>
+      <button class="nav" id="dia-next" aria-label="Día siguiente" ${esUltimo ? 'disabled' : ''}>›</button>
+    </div>
+    <p class="sub">${esUltimo ? 'Último día registrado · ' : ''}${ev.tipo === 'lectivo' ? 'día lectivo' : 'fin de semana'}${u.festivo ? ' (festivo)' : ''}</p>
     <div class="hero">${fmtMin(u.total)}</div>
     <span class="pill"><span class="dot ${ev.nivel}" aria-hidden="true">${ICONO[ev.nivel]}</span>${ETIQUETA_NIVEL[ev.nivel]}</span>
-    ${u.aprox ? '<span class="badge"> · valor aproximado</span>' : ''}
+    ${u.aprox ? '<span class="badge"> · valor aproximado</span>' : ''}${u.parcial ? '<span class="badge"> · día incompleto</span>' : ''}
     <ul class="checks">${ev.checks.map(filaCheck).join('')}</ul>
-    ${u.nota ? `<p class="sub" style="margin-top:8px">Nota: ${u.nota}</p>` : ''}`;
+    ${u.nota ? `<p class="sub" style="margin-top:8px">Nota: ${u.nota}</p>` : ''}
+    ${cats.length ? `<h3>Por categoría</h3>
+      <div class="catbar">${cats.map(([c, m, col]) => `<span style="flex:${m};background:${col}" title="${c}: ${fmtMin(m)}"></span>`).join('')}</div>
+      <div class="legend">${cats.map(([c, m, col]) => `<span><i style="background:${col}"></i>${c} ${fmtMin(m)}</span>`).join('')}</div>` : ''}
+    ${apps.length ? `<h3>Aplicaciones</h3><ul class="apps">${apps.map(([a, m]) => {
+      const lim = limApp(a), pasa = lim != null && m > lim;
+      return `<li><span>${a}</span><span class="barra"><b style="width:${Math.max(2, m / maxApp * 100)}%"></b></span><span class="val${pasa ? ' t-rojo' : ''}">${fmtMin(m)}${lim != null ? `<span class="lim"> / ${fmtMin(lim)}</span>` : ''}</span></li>`; }).join('')}</ul>` : ''}
+    ${u.horas ? `<h3>Por horas</h3><div class="chart-box mini"><canvas id="g-horas-dia" aria-label="Minutos por hora del día"></canvas></div>
+      <div class="legend"><span><i style="background:var(--c-social)"></i>Día</span><span><i style="background:var(--rojo)"></i>Horario nocturno</span></div>` : ''}`;
+  $('#sel-dia').onchange = e => seleccionarDia(e.target.value);
+  $('#dia-prev').onclick = () => i > 0 && seleccionarDia(dias[i - 1].fecha);
+  $('#dia-next').onclick = () => !esUltimo && seleccionarDia(dias[i + 1].fecha);
 
-  // Semana (lunes a domingo) del último día, frente a la anterior
-  const lun = lunesDe(u.fecha);
+  charts.horasDia?.destroy();
+  if (u.horas) {
+    const N = NORMAS.noche;
+    const manana = evaluarDia({ fecha: sumarDias(u.fecha, 1) }, POR_FECHA, NORMAS).tipo;
+    const desde = N ? (manana === 'lectivo' ? N.desde_antes_de_lectivo : N.desde_antes_de_fin_de_semana) : 99;
+    const noche = h => N && (h < N.hasta || h + 1 > desde);
+    const opt = base();
+    opt.scales.x.stacked = opt.scales.y.stacked = false;
+    opt.scales.y.ticks = { stepSize: 15, callback: v => v === 60 ? '1 h' : v % 30 === 0 ? `${v} min` : '' };
+    opt.scales.y.suggestedMax = 30;
+    opt.scales.x.ticks = { maxRotation: 0, autoSkip: false, callback: (v, k) => k % 3 === 0 ? k : '' };
+    opt.interaction = { mode: 'index', intersect: false };
+    opt.plugins.tooltip.callbacks = { title: it => `${it[0].dataIndex}:00 – ${it[0].dataIndex + 1}:00${noche(it[0].dataIndex) ? ' · noche' : ''}`, label: c => ` ${c.raw ? fmtMin(c.raw) : 'sin uso'}` };
+    charts.horasDia = new Chart($('#g-horas-dia'), { type: 'bar', data: { labels: u.horas.map((_, h) => h), datasets: [{
+      data: u.horas, backgroundColor: u.horas.map((_, h) => noche(h) ? css('--rojo') : css('--c-social')), borderRadius: 3, borderSkipped: 'bottom', categoryPercentage: 0.85, barPercentage: 0.9 }] }, options: opt });
+  }
+  pintarSemana(fecha);
+}
+
+// Semana (lunes a domingo) del día elegido, frente a la anterior
+function pintarSemana(fecha) {
+  const dias = DATOS.dias;
+  const lun = lunesDe(fecha);
   const sem = dias.filter(d => d.fecha >= lun && d.fecha <= sumarDias(lun, 6));
   const ant = dias.filter(d => d.fecha >= sumarDias(lun, -7) && d.fecha < lun);
   const r = resumirDias(sem, POR_FECHA, NORMAS);
@@ -294,7 +371,9 @@ function pintarFijo() {
       <div class="stat"><div class="k">Entre semana / fin de semana</div><div class="v" style="font-size:18px">${fmtMin(r.media_lectivo)} / ${fmtMin(r.media_fin_de_semana)}</div><div class="d muted">media por día</div></div>
       <div class="stat"><div class="k">Uso nocturno</div><div class="v">${fmtMin(r.noche_total)}</div><div class="d muted">${r.noches_con_uso} noche${r.noches_con_uso === 1 ? '' : 's'} por encima de la tolerancia</div></div>
     </div>`;
+}
 
+function pintarNormas() {
   // Normas legibles
   const L = NORMAS.limites || {}, N = NORMAS.noche, C = NORMAS.horario_clase;
   const par = o => `${fmtMin(o.lectivo)} entre semana · ${fmtMin(o.fin_de_semana)} fin de semana`;
@@ -352,7 +431,10 @@ function pintarPeriodo() {
   const usadas = ds.filter(x => x.label === 'Límite' || x.data.some(v => v));
   charts.diario?.destroy();
   charts.diario = new Chart($('#g-diario'), { type: 'bar', data: { labels: etiquetas, datasets: usadas }, options: {
-    ...opt, plugins: { ...opt.plugins, tooltip: { ...opt.plugins.tooltip, callbacks: { ...opt.plugins.tooltip.callbacks,
+    ...opt,
+    onClick: (e, els) => { if (els[0]) seleccionarDia(dias[els[0].index].fecha, true); },
+    onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+    plugins: { ...opt.plugins, tooltip: { ...opt.plugins.tooltip, callbacks: { ...opt.plugins.tooltip.callbacks,
       footer: items => { const d = dias[items[0].dataIndex]; return `Total: ${fmtMin(d.total)}${d.aprox ? ' (aprox.)' : ''}`; } } } } } });
   $('#ley-diario').innerHTML = usadas.map(x => x.label === 'Límite' ? '<span><i class="line"></i>Límite</span>' : `<span><i style="background:${x.backgroundColor}"></i>${x.label}</span>`).join('');
 
@@ -397,7 +479,7 @@ function pintarPeriodo() {
     const n = e.checks.find(c => c.clave === 'noche');
     const soc = d.categorias?.Social;
     const topApp = d.apps ? Object.entries(d.apps).sort((a, b) => b[1] - a[1])[0] : null;
-    return `<tr><td>${fechaCorta(d.fecha)}${e.tipo === 'fin_de_semana' ? ' <span class="badge">finde</span>' : ''}</td>
+    return `<tr data-fecha="${d.fecha}"${d.fecha === diaSel ? ' class="sel"' : ''}><td>${fechaCorta(d.fecha)}${e.tipo === 'fin_de_semana' ? ' <span class="badge">finde</span>' : ''}</td>
       <td class="n">${fmtMin(d.total)}${d.aprox ? ' <span class="badge">≈</span>' : ''}</td>
       <td class="n">${soc == null ? '—' : fmtMin(soc)}</td>
       <td>${topApp ? `${topApp[0]} ${fmtMin(topApp[1])}` : '—'}</td>
@@ -405,6 +487,7 @@ function pintarPeriodo() {
       <td><span class="dot ${e.nivel}" aria-hidden="true">${ICONO[e.nivel]}</span> <span class="t-${e.nivel}">${ETIQUETA_NIVEL[e.nivel]}</span></td></tr>`;
   }).join('');
   $('#tabla').innerHTML = `<thead><tr><th>Día</th><th style="text-align:right">Total</th><th style="text-align:right">Social</th><th>App principal</th><th style="text-align:right">Noche</th><th>Estado</th></tr></thead><tbody>${filas}</tbody>`;
+  $('#tabla').onclick = e => { const tr = e.target.closest('tr[data-fecha]'); if (tr) seleccionarDia(tr.dataset.fecha, true); };
 }
 
 function pintarCalor(dias) {
