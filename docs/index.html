@@ -232,6 +232,14 @@ function mostrar() {
   $('#login').classList.add('oculto');
   $('#app').classList.remove('oculto');
   $('#editar-normas').href = `https://github.com/${REPO}/edit/main/docs/normas.json`;
+  if (!DATOS.dias.length) {
+    $('#app').innerHTML = `<h1>Uso del móvil</h1>
+      <section class="card"><h2>Aún no hay datos</h2>
+      <p class="sub">En cuanto se procese el primer pantallazo de Tiempo de uso aparecerán aquí el semáforo, las gráficas y la tabla.</p>
+      <p class="sub" style="margin-top:12px"><button class="salir" id="salir2">Cerrar sesión en este dispositivo</button></p></section>`;
+    $('#salir2').onclick = () => { store.del('clave'); location.reload(); };
+    return;
+  }
   document.querySelectorAll('.chip').forEach(b => {
     b.setAttribute('aria-pressed', String(Number(b.dataset.dias) === periodo));
     b.onclick = () => { periodo = Number(b.dataset.dias); store.set('periodo', periodo); document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', String(x === b))); pintarPeriodo(); };

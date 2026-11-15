@@ -46,5 +46,5 @@ if (process.argv.includes('--descifrar')) {
   // Comprobación: se puede descifrar
   JSON.parse(await descifrar(readFileSync(ruta('docs/datos.enc'), 'utf8'), clave));
   const u = datos.dias.at(-1);
-  console.log(`Cifrado docs/datos.enc: ${datos.dias.length} días, último ${u.fecha}`);
+  console.log(`Cifrado docs/datos.enc: ${datos.dias.length} días${u ? `, último ${u.fecha}` : ''}`);
 }
