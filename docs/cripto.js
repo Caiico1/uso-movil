@@ -3,7 +3,8 @@
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+// Por trozos: con muchos datos, String.fromCharCode(...todo) desborda la pila
+const b64 = buf => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
 async function derivar(clave, salt, iter) {

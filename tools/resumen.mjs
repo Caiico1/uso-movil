@@ -74,7 +74,7 @@ const html = `<!doctype html><html><body style="margin:0;background:#f9f9f7;font
     Uso nocturno total: ${fmtMin(r.noche_total)} (${r.noches_con_uso} noche${r.noches_con_uso === 1 ? '' : 's'} por encima de la tolerancia).<br>
     Días: ✓ ${r.cuenta.ok} correctos · ! ${r.cuenta.ambar} algo por encima · ✕ ${r.cuenta.rojo} por encima.</p>
     ${fallosTxt.length ? `<p style="margin:8px 0 0;font-size:14px">Normas que más se han pasado: ${fallosTxt.join('; ')}.</p>` : ''}
-    ${r.apps.length ? `<p style="margin:8px 0 0;font-size:14px">Apps más usadas: ${r.apps.slice(0, 5).map(([a, m]) => `${a} ${fmtMin(m)}`).join(' · ')}.</p>` : ''}
+    ${r.seguimiento.dias ? `<p style="margin:8px 0 0;font-size:14px">Apps (media diaria): ${[...r.seguimiento.apps, ...(r.seguimiento.otras >= 1 ? [['otras apps', r.seguimiento.otras]] : [])].map(([a, m]) => `${a} ${fmtMin(m)}`).join(' · ')}.</p>` : ''}
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:14px;background:#fcfcfb;border:1px solid #e1e0d9;border-radius:12px">
     <tr style="color:#52514e;font-size:12px"><th style="text-align:left;padding:8px">Día</th><th style="text-align:right;padding:8px">Total</th><th style="text-align:right;padding:8px">Noche</th><th style="text-align:left;padding:8px">Estado</th></tr>

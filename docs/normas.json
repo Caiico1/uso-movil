@@ -8,8 +8,14 @@
     },
     "apps": {
       "Instagram": { "lectivo": 60, "fin_de_semana": 90 },
-      "TikTok": { "lectivo": 30, "fin_de_semana": 60 }
+      "TikTok": { "lectivo": 30, "fin_de_semana": 60 },
+      "WhatsApp": { "lectivo": 60, "fin_de_semana": 90 }
     }
+  },
+  "apps_seguimiento": {
+    "_ayuda": "Apps que se muestran siempre. Cualquier otra app entra en la lista si su media diaria en el periodo llega a 'extra_desde_media_min'; el resto se suma en 'Otras apps'.",
+    "fijas": ["TikTok", "Instagram", "WhatsApp", "ChatGPT", "Spotify"],
+    "extra_desde_media_min": 15
   },
   "noche": {
     "desde_antes_de_lectivo": 23,

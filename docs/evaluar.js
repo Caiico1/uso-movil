@@ -103,6 +103,25 @@ export function evaluarDia(dia, porFecha, normas) {
   return { fecha: dia.fecha, tipo, checks, nivel };
 }
 
+// Apps a las que se hace seguimiento en un conjunto de días: las fijas de normas.json más
+// cualquier otra cuya media diaria (en los días con desglose por app) llegue al umbral.
+// Devuelve [[app, media diaria], ...] ordenado de más a menos y, aparte, la media de "Otras apps".
+export const OTRAS_APPS = 'Otras apps';
+export function appsSeguimiento(dias, normas) {
+  const S = normas.apps_seguimiento || {};
+  const fijas = S.fijas || [];
+  const umbral = S.extra_desde_media_min ?? 15;
+  const conApps = dias.filter(d => d.apps);
+  const n = conApps.length;
+  const tot = {};
+  for (const d of conApps) for (const [a, m] of Object.entries(d.apps)) tot[a] = (tot[a] || 0) + m;
+  const med = a => n ? (tot[a] || 0) / n : 0;
+  const lista = [...new Set([...fijas, ...Object.keys(tot).filter(a => !fijas.includes(a) && med(a) >= umbral)])];
+  const apps = lista.map(a => [a, med(a)]).sort((x, y) => y[1] - x[1]);
+  const otras = n ? Object.keys(tot).filter(a => !lista.includes(a)).reduce((s, a) => s + med(a), 0) : 0;
+  return { apps, otras, extra: lista.filter(a => !fijas.includes(a)), dias: n };
+}
+
 // Resumen de un conjunto de días (una semana normalmente)
 export function resumirDias(dias, porFecha, normas) {
   const evals = dias.map(d => evaluarDia(d, porFecha, normas));
@@ -127,6 +146,7 @@ export function resumirDias(dias, porFecha, normas) {
     noches_con_uso: noche.filter(c => c.valor > (normas.noche?.tolerancia_min ?? 0)).length,
     cuenta: { ok: evals.filter(e => e.nivel === 'ok').length, ambar: evals.filter(e => e.nivel === 'ambar').length, rojo: evals.filter(e => e.nivel === 'rojo').length },
     apps: Object.entries(apps).sort((a, b) => b[1] - a[1]),
+    seguimiento: appsSeguimiento(dias, normas),
   };
 }
 

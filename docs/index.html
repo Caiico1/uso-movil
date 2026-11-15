@@ -59,9 +59,6 @@ h2 { font-size: 16px; margin: 0 0 2px; }
 .grid2 > .card { margin-top: 0; }
 @media (min-width: 760px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2); padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
-.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .hero { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 3px 10px 3px 6px; border-radius: 999px; background: var(--surface-2); }
 .dot { width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; flex: none; }
@@ -146,12 +143,7 @@ a { color: var(--accent); }
       <h1>Uso del móvil</h1>
       <p class="sub" id="actualizado"></p>
     </div>
-    <div class="chips" role="group" aria-label="Periodo">
-      <button class="chip" data-dias="7">7 días</button>
-      <button class="chip" data-dias="28">4 semanas</button>
-      <button class="chip" data-dias="90">3 meses</button>
-      <button class="chip" data-dias="0">Todo</button>
-    </div>
+    <select id="sel-periodo" aria-label="Periodo"></select>
   </div>
 
   <div class="grid2" style="margin-top:14px">
@@ -176,7 +168,7 @@ a { color: var(--accent); }
       <div class="legend" id="ley-app"></div>
     </section>
     <section class="card">
-      <h2>Apps más usadas</h2>
+      <h2>Apps en seguimiento</h2>
       <p class="sub" id="sub-top">Media diaria en el periodo.</p>
       <div class="chart-box short"><canvas id="g-top" aria-label="Apps más usadas"></canvas></div>
       <div class="legend" id="ley-top"></div>
@@ -207,7 +199,7 @@ a { color: var(--accent); }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script type="module">
 import { descifrar } from './cripto.js';
-import { evaluarDia, resumirDias, fmtMin, fechaLarga, fechaCorta, sumarDias, lunesDe, diaSemana, ETIQUETA_NIVEL } from './evaluar.js';
+import { evaluarDia, resumirDias, appsSeguimiento, OTRAS_APPS, fmtMin, fechaLarga, fechaCorta, sumarDias, lunesDe, diaSemana, parseFecha, ETIQUETA_NIVEL } from './evaluar.js';
 
 const REPO = 'Caiico1/uso-movil';
 const ICONO = { ok: '✓', ambar: '!', rojo: '✕', sin_datos: '?' };
@@ -218,6 +210,10 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 
 let DATOS, NORMAS, POR_FECHA, diaSel = null, periodo = Number(store.get('periodo') ?? 28);
+// Periodos del desplegable: días hacia atrás desde el último día con datos (0 = todo el historial)
+const PERIODOS = [[7, 'Última semana'], [14, 'Últimas 2 semanas'], [21, 'Últimas 3 semanas'], [28, 'Últimas 4 semanas'], [30, 'Último mes'],
+  [60, 'Últimos 2 meses'], [90, 'Últimos 3 meses'], [180, 'Últimos 6 meses'], [365, 'Último año']];
+const diasEntre = (a, b) => Math.round((parseFecha(b) - parseFecha(a)) / 864e5) + 1;
 const charts = {};
 
 async function cargar(clave) {
@@ -257,10 +253,16 @@ function mostrar() {
     $('#salir2').onclick = () => { store.del('clave'); location.reload(); };
     return;
   }
-  document.querySelectorAll('.chip').forEach(b => {
-    b.setAttribute('aria-pressed', String(Number(b.dataset.dias) === periodo));
-    b.onclick = () => { periodo = Number(b.dataset.dias); store.set('periodo', periodo); document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', String(x === b))); pintarPeriodo(); };
-  });
+  // Desplegable de periodos: «Todo el historial» solo aparece con más de un año de datos;
+  // los periodos más largos que los datos disponibles indican cuántos días hay.
+  const alcance = diasEntre(DATOS.dias[0].fecha, DATOS.dias.at(-1).fecha);
+  const n = DATOS.dias.length;
+  const ops = PERIODOS.map(([d, t]) => [d, alcance < d ? `${t} (hay ${n} día${n > 1 ? 's' : ''})` : t]);
+  if (alcance > 365) ops.push([0, 'Todo el historial']);
+  if (!ops.some(o => o[0] === periodo)) periodo = 28;
+  const selP = $('#sel-periodo');
+  selP.innerHTML = ops.map(([d, t]) => `<option value="${d}"${d === periodo ? ' selected' : ''}>${t}</option>`).join('');
+  selP.onchange = () => { periodo = Number(selP.value); store.set('periodo', periodo); pintarPeriodo(); };
   pintarFijo();
   pintarPeriodo();
 }
@@ -299,8 +301,9 @@ function pintarDia(fecha) {
   const cats = u.categorias ? [...CAT_ORDEN.filter(c => u.categorias[c]).map(c => [c, u.categorias[c], css(CAT_VAR[c])]),
     ...Object.entries(u.categorias).filter(([c]) => !CAT_ORDEN.includes(c)).map(([c, m]) => [c, m, css('--c-otras')]),
     ...(u.total - sumaCat > 0 ? [['Otras', u.total - sumaCat, css('--c-otras')]] : [])] : [];
-  const apps = Object.entries(u.apps || {}).sort((a, b) => b[1] - a[1]);
-  const maxApp = apps[0]?.[1] || 1;
+  const seg1 = appsSeguimiento([u], NORMAS);
+  const apps = u.apps ? [...seg1.apps.filter(([a, m]) => m > 0 || NORMAS.limites?.apps?.[a]), ...(seg1.otras > 0 ? [[OTRAS_APPS, seg1.otras]] : [])] : [];
+  const maxApp = Math.max(1, ...apps.map(x => x[1]));
   const limApp = a => NORMAS.limites?.apps?.[a]?.[ev.tipo];
   $('#ultimo').innerHTML = `
     <div class="dia-nav">
@@ -319,7 +322,7 @@ function pintarDia(fecha) {
       <div class="legend">${cats.map(([c, m, col]) => `<span><i style="background:${col}"></i>${c} ${fmtMin(m)}</span>`).join('')}</div>` : ''}
     ${apps.length ? `<h3>Aplicaciones</h3><ul class="apps">${apps.map(([a, m]) => {
       const lim = limApp(a), pasa = lim != null && m > lim;
-      return `<li><span>${a}</span><span class="barra"><b style="width:${Math.max(2, m / maxApp * 100)}%"></b></span><span class="val${pasa ? ' t-rojo' : ''}">${fmtMin(m)}${lim != null ? `<span class="lim"> / ${fmtMin(lim)}</span>` : ''}</span></li>`; }).join('')}</ul>` : ''}
+      return `<li><span${a === OTRAS_APPS ? ' class="muted"' : ''}>${a}</span><span class="barra"><b style="width:${Math.max(2, m / maxApp * 100)}%${a === OTRAS_APPS ? ';background:var(--c-otras)' : ''}"></b></span><span class="val${pasa ? ' t-rojo' : ''}">${fmtMin(m)}${lim != null ? `<span class="lim"> / ${fmtMin(lim)}</span>` : ''}</span></li>`; }).join('')}</ul>` : ''}
     ${u.horas ? `<h3>Por horas</h3><div class="chart-box mini"><canvas id="g-horas-dia" aria-label="Minutos por hora del día"></canvas></div>
       <div class="legend"><span><i style="background:var(--c-social)"></i>Día</span><span><i style="background:var(--rojo)"></i>Horario nocturno</span></div>` : ''}`;
   $('#sel-dia').onchange = e => seleccionarDia(e.target.value);
@@ -383,6 +386,8 @@ function pintarNormas() {
   if (L.total) items.push(`Tiempo total: ${par(L.total)}`);
   for (const [k, v] of Object.entries(L.categorias || {})) items.push(`${k} (categoría): ${par(v)}`);
   for (const [k, v] of Object.entries(L.apps || {})) items.push(`${k}: ${par(v)}`);
+  const S = NORMAS.apps_seguimiento;
+  if (S) items.push(`Apps en seguimiento: ${(S.fijas || []).join(', ')} y cualquier otra con una media de ${S.extra_desde_media_min ?? 15} min al día o más en el periodo; el resto se suma en «${OTRAS_APPS}»`);
   if (N) items.push(`Sin móvil por la noche: desde las ${hora(N.desde_antes_de_lectivo)} si al día siguiente hay clase, desde las ${hora(N.desde_antes_de_fin_de_semana)} viernes y sábado, hasta las ${hora(N.hasta)} (tolerancia ${N.tolerancia_min} min)`);
   if (C?.activo) items.push(`En horario de clase (${hora(C.desde)}–${hora(C.hasta)}, lunes a viernes): como mucho ${C.max_min} min`);
   items.push(`Semáforo: «algo por encima» hasta un ${NORMAS.semaforo?.ambar_hasta_pct ?? 20} % sobre el límite; más, «por encima»`);
@@ -416,16 +421,24 @@ function lineaLimite(dias, clave) {
 }
 
 const media = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-const AGRUPAR_DESDE = 45;   // con más días que esto, las barras van por semanas
+const AGRUPAR_DESDE = 45;   // con un tramo de más días que esto, las barras van por semanas
+const MESES_DESDE = 200;    // y con más de esto, por meses
+const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const CALOR_DESDE = 14;     // con más días con horas, el mapa de calor va por día de la semana
 const NOMBRE_DIA = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-// Grupos de barras: un día cada uno o, en periodos largos, una semana (lunes a domingo)
+// Grupos de barras según lo largo que sea el tramo con datos: días, semanas (lunes a domingo) o meses
 function agrupar(dias) {
-  if (dias.length <= AGRUPAR_DESDE) return { semanal: false, grupos: dias.map(d => ({ etq: fechaCorta(d.fecha), titulo: fechaLarga(d.fecha), dias: [d] })) };
-  const porSemana = new Map();
-  for (const d of dias) { const l = lunesDe(d.fecha); if (!porSemana.has(l)) porSemana.set(l, []); porSemana.get(l).push(d); }
-  return { semanal: true, grupos: [...porSemana].map(([l, ds]) => ({ etq: 'sem ' + fechaCorta(l).slice(4), titulo: `Semana del ${fechaCorta(l)} al ${fechaCorta(sumarDias(l, 6))}`, dias: ds })) };
+  const tramo = dias.length ? diasEntre(dias[0].fecha, dias.at(-1).fecha) : 0;
+  if (tramo <= AGRUPAR_DESDE) return { modo: 'dia', semanal: false, grupos: dias.map(d => ({ etq: fechaCorta(d.fecha), titulo: fechaLarga(d.fecha), dias: [d] })) };
+  const mensual = tramo > MESES_DESDE;
+  const clave = d => mensual ? d.fecha.slice(0, 7) : lunesDe(d.fecha);
+  const mapa = new Map();
+  for (const d of dias) { const k = clave(d); if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(d); }
+  const etq = k => { if (!mensual) return 'sem ' + fechaCorta(k).slice(4); const [y, m] = k.split('-'); return `${MES[m - 1]} ${y.slice(2)}`; };
+  const tit = k => { if (!mensual) return `Semana del ${fechaCorta(k)} al ${fechaCorta(sumarDias(k, 6))}`; const [y, m] = k.split('-'); return `${MES_LARGO[m - 1]} de ${y}`; };
+  return { modo: mensual ? 'mes' : 'semana', semanal: true, grupos: [...mapa].map(([k, ds]) => ({ etq: etq(k), titulo: tit(k), dias: ds })) };
 }
 function lineaLimiteG(grupos, clave) {
   return { type: 'line', label: 'Límite', data: grupos.map(g => media(g.dias.map(d => limiteDe(d, clave)))), borderColor: css('--ink'), borderWidth: 1.5, borderDash: [5, 4],
@@ -434,9 +447,10 @@ function lineaLimiteG(grupos, clave) {
 
 function pintarPeriodo() {
   const dias = diasPeriodo();
-  const { semanal, grupos } = agrupar(dias);
+  const { modo, semanal, grupos } = agrupar(dias);
   const etiquetas = grupos.map(g => g.etq);
-  const unidad = semanal ? 'Media diaria de cada semana' : 'Minutos al día';
+  const cada = modo === 'mes' ? 'cada mes' : 'cada semana';
+  const unidad = semanal ? `Media diaria de ${cada}` : 'Minutos al día';
   const opt = base();
   opt.plugins.tooltip.callbacks = {
     title: it => grupos[it[0].dataIndex].titulo,
@@ -452,8 +466,8 @@ function pintarPeriodo() {
   };
 
   // 1. Tiempo por categoría
-  $('#sub-diario').textContent = `${unidad}. La línea discontinua es el límite de referencia${semanal ? ' (media de la semana)' : ' (cambia en fin de semana)'}. Pulsa una barra para ver ${semanal ? 'el último día de esa semana' : 'ese día'} en detalle.`;
-  $('#tit-diario').textContent = semanal ? 'Tiempo por semana y categoría' : 'Tiempo diario por categoría';
+  $('#sub-diario').textContent = `${unidad}. La línea discontinua es el límite de referencia${semanal ? ` (media de ${modo === 'mes' ? 'el mes' : 'la semana'})` : ' (cambia en fin de semana)'}. Pulsa una barra para ver ${semanal ? `el último día de ${modo === 'mes' ? 'ese mes' : 'esa semana'}` : 'ese día'} en detalle.`;
+  $('#tit-diario').textContent = modo === 'mes' ? 'Tiempo por mes y categoría' : semanal ? 'Tiempo por semana y categoría' : 'Tiempo diario por categoría';
   const otras = d => d.categorias ? Math.max(0, d.total - Object.values(d.categorias).reduce((a, b) => a + b, 0)) : 0;
   const serie = f => grupos.map(g => media(g.dias.map(f)) ?? 0);
   const cats = CAT_ORDEN.filter(c => dias.some(d => d.categorias?.[c]));
@@ -470,30 +484,34 @@ function pintarPeriodo() {
   $('#ley-diario').innerHTML = usadas.map(x => x.label === 'Límite' ? '<span><i class="line"></i>Límite</span>' : `<span><i style="background:${x.backgroundColor}"></i>${x.label}</span>`).join('');
 
   // 2. Por app
-  const totales = {};
-  for (const d of dias) for (const [a, m] of Object.entries(d.apps || {})) totales[a] = (totales[a] || 0) + m;
-  const apps = Object.entries(totales).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  // Solo las apps en seguimiento (fijas + las que pasan el umbral de media diaria); el resto, «Otras apps»
+  const seg = appsSeguimiento(dias, NORMAS);
+  const medias = Object.fromEntries([...seg.apps, [OTRAS_APPS, seg.otras]]);
+  const enLista = new Set(seg.apps.map(x => x[0]));
+  const apps = seg.dias ? [...enLista, OTRAS_APPS] : [];
+  const valorApp = (d, app) => !d.apps ? null : app === OTRAS_APPS
+    ? Object.entries(d.apps).filter(([a]) => !enLista.has(a)).reduce((s, [, m]) => s + m, 0) : (d.apps[app] ?? 0);
   const sel = $('#sel-app'), previa = store.get('app') || sel.value || apps[0];
   sel.innerHTML = apps.map(a => `<option>${a}</option>`).join('');
   sel.value = apps.includes(previa) ? previa : apps[0] || '';
-  $('#sub-app').textContent = semanal ? 'Media diaria de cada semana para la app elegida.' : 'Minutos al día de la app elegida.';
+  $('#sub-app').textContent = (semanal ? `Media diaria de ${cada} para la app elegida.` : 'Minutos al día de la app elegida.') + (seg.extra.length ? ` Entra también ${seg.extra.join(', ')} por llegar a ${NORMAS.apps_seguimiento?.extra_desde_media_min ?? 15} min al día de media.` : '');
   const pintarApp = () => {
     const app = sel.value; store.set('app', app);
-    const valores = grupos.map(g => media(g.dias.map(d => d.apps ? (d.apps[app] ?? 0) : null)));
-    const set = [{ label: app, data: valores, backgroundColor: css('--c-social'), borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }];
+    const valores = grupos.map(g => media(g.dias.map(d => valorApp(d, app))));
+    const set = [{ label: app, data: valores, backgroundColor: css(app === OTRAS_APPS ? '--c-otras' : '--c-social'), borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }];
     const tieneLim = NORMAS.limites?.apps?.[app];
     if (tieneLim) set.push(lineaLimiteG(grupos, 'app:' + app));
     charts.app?.destroy();
     charts.app = new Chart($('#g-app'), { type: 'bar', data: { labels: etiquetas, datasets: set }, options: { ...opt, onClick: clicGrupo, onHover: cursor } });
-    $('#ley-app').innerHTML = (tieneLim ? '<span><i class="line"></i>Límite</span>' : '<span class="muted">Sin límite definido para esta app</span>') + (dias.some(d => !d.apps) ? '<span class="muted">Los días sin desglose por app no cuentan</span>' : '');
+    $('#ley-app').innerHTML = (tieneLim ? '<span><i class="line"></i>Límite</span>' : app === OTRAS_APPS ? '<span class="muted">Suma de las apps que no están en seguimiento</span>' : '<span class="muted">Sin límite definido para esta app</span>') + (dias.some(d => !d.apps) ? '<span class="muted">Los días sin desglose por app no cuentan</span>' : '');
   };
   sel.onchange = pintarApp;
   if (apps.length) pintarApp(); else { charts.app?.destroy(); $('#ley-app').innerHTML = ''; }
 
   // 3. Apps más usadas: media diaria y comparación con el periodo anterior de la misma duración
   const conApps = dias.filter(d => d.apps), nDesg = conApps.length || 1;
-  const top = apps.slice(0, 8);
-  const mediaApp = (ds, a) => ds.reduce((s, d) => s + (d.apps[a] ?? 0), 0) / ds.length;
+  const top = apps;
+  const mediaApp = (ds, a) => ds.reduce((s, d) => s + valorApp(d, a), 0) / ds.length;
   let previos = [];
   if (periodo && DATOS.dias.length) {
     const u = DATOS.dias.at(-1).fecha;
@@ -511,10 +529,10 @@ function pintarPeriodo() {
     const lin = [` ${fmtMin(c.raw)} al día`];
     if (d != null && Math.abs(d) >= 1) lin.push(` ${d > 0 ? '▲' : '▼'} ${fmtMin(Math.abs(d))}/día frente al periodo anterior`);
     return lin; } };
-  if (top.length) charts.top = new Chart($('#g-top'), { type: 'bar', data: { labels: top, datasets: [{ data: top.map(a => totales[a] / nDesg), backgroundColor: css('--c-social'), borderRadius: 4, borderSkipped: 'left', maxBarThickness: 22 }] }, options: optTop });
+  if (top.length) charts.top = new Chart($('#g-top'), { type: 'bar', data: { labels: top, datasets: [{ data: top.map(a => medias[a]), backgroundColor: top.map(a => css(a === OTRAS_APPS ? '--c-otras' : '--c-social')), borderRadius: 4, borderSkipped: 'left', maxBarThickness: 22 }] }, options: optTop });
   const cambios = top.map(a => [a, delta(a)]).filter(([, d]) => d != null && Math.abs(d) >= 5);
-  $('#ley-top').innerHTML = !periodo ? '<span class="muted">Con «Todo» no hay periodo anterior con el que comparar.</span>'
-    : !previos.length ? `<span class="muted">Sin datos de los ${periodo} días anteriores para comparar.</span>`
+  $('#ley-top').innerHTML = !periodo ? '<span class="muted">Con «Todo el historial» no hay periodo anterior con el que comparar.</span>'
+    : !previos.length ? `<span class="muted">Sin datos de los ${periodo} días anteriores al periodo para comparar.</span>`
     : `<span class="muted">Frente a los ${periodo} días anteriores (${previos.length} con datos):</span>` + (cambios.length
       ? cambios.map(([a, d]) => `<span class="${d > 0 ? 't-rojo' : 't-ok'}">${a} ${d > 0 ? '▲' : '▼'} ${fmtMin(Math.abs(d))}/día</span>`).join('')
       : '<span class="muted">sin cambios de más de 5 min/día</span>');
