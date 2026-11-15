@@ -42,8 +42,13 @@ jobs:
           msg["To"] = ", ".join(dest)
           msg.set_content("Resumen semanal de uso del móvil. Abre este correo en formato HTML.")
           msg.add_alternative(open("out/resumen.html", encoding="utf-8").read(), subtype="html")
+          usuario = os.environ["GMAIL_USUARIO"].strip()
+          # La contraseña de aplicación son 16 letras; Google la muestra con espacios (a veces no separables)
+          clave = "".join(os.environ["GMAIL_APP_PASSWORD"].split()).replace(" ", "")
+          if len(clave) != 16 or not clave.isascii() or not clave.isalpha():
+              raise SystemExit(f"GMAIL_APP_PASSWORD no parece una contraseña de aplicación: {len(clave)} caracteres, ascii={clave.isascii()}, solo letras={clave.isalpha()}")
           with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-              s.login(os.environ["GMAIL_USUARIO"], os.environ["GMAIL_APP_PASSWORD"])
+              s.login(usuario, clave)
               s.send_message(msg)
           print("Enviado a", len(dest), "destinatarios")
           EOF
