@@ -11,7 +11,16 @@ const arg = n => { const i = process.argv.indexOf(n); return i > -1 ? process.ar
 const clave = process.env.CLAVE?.trim() || (existsSync(new URL('privado/clave.txt', raiz)) ? readFileSync(new URL('privado/clave.txt', raiz), 'utf8').trim() : null);
 if (!clave) throw new Error('Falta CLAVE');
 
-const datos = JSON.parse(await descifrar(readFileSync(new URL('docs/datos.enc', raiz), 'utf8'), clave));
+let datos;
+try {
+  datos = JSON.parse(await descifrar(readFileSync(new URL('docs/datos.enc', raiz), 'utf8'), clave));
+} catch (e) {
+  // Diagnóstico sin revelar la clave: longitud y huella corta
+  const { createHash } = await import('node:crypto');
+  const raw = process.env.CLAVE || '';
+  console.error(`No se pudo descifrar. CLAVE: ${clave.length} caracteres (sin recortar ${raw.length}), huella ${createHash('sha256').update(clave).digest('hex').slice(0, 6)}`);
+  throw e;
+}
 const normas = JSON.parse(readFileSync(new URL('docs/normas.json', raiz), 'utf8'));
 const porFecha = Object.fromEntries(datos.dias.map(d => [d.fecha, d]));
 
