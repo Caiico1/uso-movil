@@ -1,0 +1,49 @@
+name: Resumen semanal por correo
+
+on:
+  schedule:
+    - cron: "0 18 * * 1"   # lunes 19:00 (invierno) / 20:00 (verano) en Madrid
+  workflow_dispatch:
+    inputs:
+      semana:
+        description: "Cualquier fecha de la semana a resumir (AAAA-MM-DD). Vacío = la semana pasada"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  resumen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generar resumen
+        env:
+          CLAVE: ${{ secrets.CLAVE }}
+          SEMANA: ${{ github.event.inputs.semana }}
+        run: |
+          if [ -n "$SEMANA" ]; then node tools/resumen.mjs --semana "$SEMANA" --salida out; else node tools/resumen.mjs --salida out; fi
+      - name: Enviar correo (Gmail)
+        env:
+          GMAIL_USUARIO: ${{ secrets.GMAIL_USUARIO }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          DESTINATARIOS: ${{ secrets.DESTINATARIOS }}
+        run: |
+          python3 - <<'EOF'
+          import os, smtplib
+          from email.message import EmailMessage
+          msg = EmailMessage()
+          msg["Subject"] = open("out/asunto.txt", encoding="utf-8").read().strip()
+          msg["From"] = os.environ["GMAIL_USUARIO"]
+          dest = [d.strip() for d in os.environ["DESTINATARIOS"].split(",") if d.strip()]
+          msg["To"] = ", ".join(dest)
+          msg.set_content("Resumen semanal de uso del móvil. Abre este correo en formato HTML.")
+          msg.add_alternative(open("out/resumen.html", encoding="utf-8").read(), subtype="html")
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+              s.login(os.environ["GMAIL_USUARIO"], os.environ["GMAIL_APP_PASSWORD"])
+              s.send_message(msg)
+          print("Enviado a", len(dest), "destinatarios")
+          EOF

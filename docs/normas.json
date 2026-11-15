@@ -1,0 +1,30 @@
+{
+  "_ayuda": "Normas de referencia, solo para seguimiento. Minutos al día. 'lectivo' = lunes a viernes; 'fin_de_semana' = sábado, domingo y los días marcados como festivos. Las horas son de 0 a 24 y admiten decimales (23.5 = 23:30).",
+  "dias_fin_de_semana": [6, 7],
+  "limites": {
+    "total": { "lectivo": 180, "fin_de_semana": 240 },
+    "categorias": {
+      "Social": { "lectivo": 90, "fin_de_semana": 150 }
+    },
+    "apps": {
+      "Instagram": { "lectivo": 60, "fin_de_semana": 90 },
+      "TikTok": { "lectivo": 30, "fin_de_semana": 60 }
+    }
+  },
+  "noche": {
+    "desde_antes_de_lectivo": 23,
+    "desde_antes_de_fin_de_semana": 24,
+    "hasta": 7,
+    "tolerancia_min": 10,
+    "ambar_hasta_min": 30
+  },
+  "horario_clase": {
+    "activo": true,
+    "desde": 8.5,
+    "hasta": 14.5,
+    "max_min": 20
+  },
+  "semaforo": {
+    "ambar_hasta_pct": 20
+  }
+}
