@@ -160,8 +160,8 @@ a { color: var(--accent); }
   </div>
 
   <section class="card">
-    <h2>Tiempo diario por categoría</h2>
-    <p class="sub">Minutos al día. La línea discontinua es el límite de referencia (cambia en fin de semana). Pulsa una barra para ver ese día en detalle.</p>
+    <h2 id="tit-diario">Tiempo diario por categoría</h2>
+    <p class="sub" id="sub-diario">Minutos al día. La línea discontinua es el límite de referencia (cambia en fin de semana). Pulsa una barra para ver ese día en detalle.</p>
     <div class="chart-box"><canvas id="g-diario" aria-label="Tiempo diario por categoría"></canvas></div>
     <div class="legend" id="ley-diario"></div>
   </section>
@@ -169,7 +169,7 @@ a { color: var(--accent); }
   <div class="grid2" style="margin-top:14px">
     <section class="card">
       <div class="top">
-        <div><h2>Por aplicación</h2><p class="sub">Minutos al día de la app elegida.</p></div>
+        <div><h2>Por aplicación</h2><p class="sub" id="sub-app">Minutos al día de la app elegida.</p></div>
         <select id="sel-app" aria-label="Aplicación"></select>
       </div>
       <div class="chart-box short"><canvas id="g-app" aria-label="Uso diario de la aplicación"></canvas></div>
@@ -179,12 +179,13 @@ a { color: var(--accent); }
       <h2>Apps más usadas</h2>
       <p class="sub" id="sub-top">Media diaria en el periodo.</p>
       <div class="chart-box short"><canvas id="g-top" aria-label="Apps más usadas"></canvas></div>
+      <div class="legend" id="ley-top"></div>
     </section>
   </div>
 
   <section class="card">
     <h2>¿A qué horas lo usa?</h2>
-    <p class="sub">Minutos por hora. Las casillas con borde discontinuo son horario nocturno. Las horas se leen del gráfico del iPhone (aproximadas).</p>
+    <p class="sub" id="sub-calor"></p>
     <div class="heat-wrap"><div class="heat" id="heat"></div></div>
     <div class="seq-legend" id="heat-ley"></div>
   </section>
@@ -414,28 +415,58 @@ function lineaLimite(dias, clave) {
            pointRadius: 0, stepped: 'middle', stack: 'limite', order: -1, fill: false };
 }
 
+const media = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const AGRUPAR_DESDE = 45;   // con más días que esto, las barras van por semanas
+const CALOR_DESDE = 14;     // con más días con horas, el mapa de calor va por día de la semana
+const NOMBRE_DIA = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+// Grupos de barras: un día cada uno o, en periodos largos, una semana (lunes a domingo)
+function agrupar(dias) {
+  if (dias.length <= AGRUPAR_DESDE) return { semanal: false, grupos: dias.map(d => ({ etq: fechaCorta(d.fecha), titulo: fechaLarga(d.fecha), dias: [d] })) };
+  const porSemana = new Map();
+  for (const d of dias) { const l = lunesDe(d.fecha); if (!porSemana.has(l)) porSemana.set(l, []); porSemana.get(l).push(d); }
+  return { semanal: true, grupos: [...porSemana].map(([l, ds]) => ({ etq: 'sem ' + fechaCorta(l).slice(4), titulo: `Semana del ${fechaCorta(l)} al ${fechaCorta(sumarDias(l, 6))}`, dias: ds })) };
+}
+function lineaLimiteG(grupos, clave) {
+  return { type: 'line', label: 'Límite', data: grupos.map(g => media(g.dias.map(d => limiteDe(d, clave)))), borderColor: css('--ink'), borderWidth: 1.5, borderDash: [5, 4],
+           pointRadius: 0, stepped: 'middle', stack: 'limite', order: -1, fill: false };
+}
+
 function pintarPeriodo() {
   const dias = diasPeriodo();
-  const etiquetas = dias.map(d => fechaCorta(d.fecha));
+  const { semanal, grupos } = agrupar(dias);
+  const etiquetas = grupos.map(g => g.etq);
+  const unidad = semanal ? 'Media diaria de cada semana' : 'Minutos al día';
   const opt = base();
-  opt.plugins.tooltip.callbacks = { label: c => c.raw == null || c.raw === 0 ? null : ` ${c.dataset.label}: ${fmtMin(c.raw)}` };
+  opt.plugins.tooltip.callbacks = {
+    title: it => grupos[it[0].dataIndex].titulo,
+    label: c => c.raw == null || c.raw === 0 ? null : ` ${c.dataset.label}: ${fmtMin(c.raw)}${semanal ? '/día' : ''}`,
+  };
   opt.plugins.tooltip.filter = c => c.raw != null && c.raw !== 0;
+  const clicGrupo = (e, els) => { if (els[0]) seleccionarDia(grupos[els[0].index].dias.at(-1).fecha, true); };
+  const cursor = (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+  const pie = items => {
+    const g = grupos[items[0].dataIndex];
+    if (!semanal) { const d = g.dias[0]; return `Total: ${fmtMin(d.total)}${d.aprox ? ' (aprox.)' : ''}`; }
+    return `Media: ${fmtMin(media(g.dias.map(d => d.total)))}/día · ${g.dias.length} día${g.dias.length > 1 ? 's' : ''} con datos`;
+  };
 
-  // 1. Diario por categoría
+  // 1. Tiempo por categoría
+  $('#sub-diario').textContent = `${unidad}. La línea discontinua es el límite de referencia${semanal ? ' (media de la semana)' : ' (cambia en fin de semana)'}. Pulsa una barra para ver ${semanal ? 'el último día de esa semana' : 'ese día'} en detalle.`;
+  $('#tit-diario').textContent = semanal ? 'Tiempo por semana y categoría' : 'Tiempo diario por categoría';
+  const otras = d => d.categorias ? Math.max(0, d.total - Object.values(d.categorias).reduce((a, b) => a + b, 0)) : 0;
+  const serie = f => grupos.map(g => media(g.dias.map(f)) ?? 0);
   const cats = CAT_ORDEN.filter(c => dias.some(d => d.categorias?.[c]));
-  const ds = cats.map(c => ({ label: c, data: dias.map(d => d.categorias?.[c] ?? 0), backgroundColor: css(CAT_VAR[c]) }));
-  ds.push({ label: 'Otras', data: dias.map(d => d.categorias ? Math.max(0, d.total - Object.values(d.categorias).reduce((a, b) => a + b, 0)) : 0), backgroundColor: css('--c-otras') });
-  ds.push({ label: 'Sin desglose', data: dias.map(d => d.categorias ? 0 : d.total), backgroundColor: css('--c-sin') });
+  const ds = cats.map(c => ({ label: c, data: serie(d => d.categorias?.[c] ?? 0), backgroundColor: css(CAT_VAR[c]) }));
+  ds.push({ label: 'Otras', data: serie(otras), backgroundColor: css('--c-otras') });
+  ds.push({ label: 'Sin desglose', data: serie(d => d.categorias ? 0 : d.total), backgroundColor: css('--c-sin') });
   ds.forEach(x => Object.assign(x, { borderColor: css('--surface'), borderWidth: { top: 2 }, borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }));
-  ds.push(lineaLimite(dias, 'total'));
+  ds.push(lineaLimiteG(grupos, 'total'));
   const usadas = ds.filter(x => x.label === 'Límite' || x.data.some(v => v));
   charts.diario?.destroy();
   charts.diario = new Chart($('#g-diario'), { type: 'bar', data: { labels: etiquetas, datasets: usadas }, options: {
-    ...opt,
-    onClick: (e, els) => { if (els[0]) seleccionarDia(dias[els[0].index].fecha, true); },
-    onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
-    plugins: { ...opt.plugins, tooltip: { ...opt.plugins.tooltip, callbacks: { ...opt.plugins.tooltip.callbacks,
-      footer: items => { const d = dias[items[0].dataIndex]; return `Total: ${fmtMin(d.total)}${d.aprox ? ' (aprox.)' : ''}`; } } } } } });
+    ...opt, onClick: clicGrupo, onHover: cursor,
+    plugins: { ...opt.plugins, tooltip: { ...opt.plugins.tooltip, callbacks: { ...opt.plugins.tooltip.callbacks, footer: pie } } } } });
   $('#ley-diario').innerHTML = usadas.map(x => x.label === 'Límite' ? '<span><i class="line"></i>Límite</span>' : `<span><i style="background:${x.backgroundColor}"></i>${x.label}</span>`).join('');
 
   // 2. Por app
@@ -445,30 +476,48 @@ function pintarPeriodo() {
   const sel = $('#sel-app'), previa = store.get('app') || sel.value || apps[0];
   sel.innerHTML = apps.map(a => `<option>${a}</option>`).join('');
   sel.value = apps.includes(previa) ? previa : apps[0] || '';
+  $('#sub-app').textContent = semanal ? 'Media diaria de cada semana para la app elegida.' : 'Minutos al día de la app elegida.';
   const pintarApp = () => {
     const app = sel.value; store.set('app', app);
-    const conApps = dias.map(d => d.apps ? (d.apps[app] ?? 0) : null);
-    const set = [{ label: app, data: conApps, backgroundColor: css('--c-social'), borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }];
+    const valores = grupos.map(g => media(g.dias.map(d => d.apps ? (d.apps[app] ?? 0) : null)));
+    const set = [{ label: app, data: valores, backgroundColor: css('--c-social'), borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 36 }];
     const tieneLim = NORMAS.limites?.apps?.[app];
-    if (tieneLim) set.push(lineaLimite(dias, 'app:' + app));
+    if (tieneLim) set.push(lineaLimiteG(grupos, 'app:' + app));
     charts.app?.destroy();
-    charts.app = new Chart($('#g-app'), { type: 'bar', data: { labels: etiquetas, datasets: set }, options: opt });
-    $('#ley-app').innerHTML = (tieneLim ? '<span><i class="line"></i>Límite</span>' : '<span class="muted">Sin límite definido para esta app</span>') + (dias.some(d => !d.apps) ? '<span class="muted">Los días sin desglose por app quedan en blanco</span>' : '');
+    charts.app = new Chart($('#g-app'), { type: 'bar', data: { labels: etiquetas, datasets: set }, options: { ...opt, onClick: clicGrupo, onHover: cursor } });
+    $('#ley-app').innerHTML = (tieneLim ? '<span><i class="line"></i>Límite</span>' : '<span class="muted">Sin límite definido para esta app</span>') + (dias.some(d => !d.apps) ? '<span class="muted">Los días sin desglose por app no cuentan</span>' : '');
   };
   sel.onchange = pintarApp;
-  if (apps.length) pintarApp();
+  if (apps.length) pintarApp(); else { charts.app?.destroy(); $('#ley-app').innerHTML = ''; }
 
-  // 3. Top apps (media diaria sobre días con desglose)
-  const nDesg = dias.filter(d => d.apps).length || 1;
+  // 3. Apps más usadas: media diaria y comparación con el periodo anterior de la misma duración
+  const conApps = dias.filter(d => d.apps), nDesg = conApps.length || 1;
   const top = apps.slice(0, 8);
+  const mediaApp = (ds, a) => ds.reduce((s, d) => s + (d.apps[a] ?? 0), 0) / ds.length;
+  let previos = [];
+  if (periodo && DATOS.dias.length) {
+    const u = DATOS.dias.at(-1).fecha;
+    previos = DATOS.dias.filter(d => d.apps && d.fecha > sumarDias(u, -2 * periodo) && d.fecha <= sumarDias(u, -periodo));
+  }
+  const delta = a => previos.length ? mediaApp(conApps, a) - mediaApp(previos, a) : null;
   $('#sub-top').textContent = `Media diaria en los ${nDesg} día${nDesg > 1 ? 's' : ''} con desglose por app.`;
   charts.top?.destroy();
   const optTop = base();
   optTop.indexAxis = 'y';
   optTop.interaction = { mode: 'nearest', intersect: true, axis: 'y' };
   optTop.scales = { x: { beginAtZero: true, grid: { color: css('--grid') }, border: { display: false }, ticks: { maxRotation: 0, callback: v => v === 0 ? '0' : v % 60 === 0 ? `${v / 60} h` : v % 30 === 0 && v < 60 ? '30 min' : '' } }, y: { grid: { display: false }, border: { color: css('--axis') }, ticks: { color: css('--ink-2') } } };
-  optTop.plugins.tooltip.callbacks = { label: c => ` ${fmtMin(c.raw)} al día` };
-  charts.top = new Chart($('#g-top'), { type: 'bar', data: { labels: top, datasets: [{ data: top.map(a => totales[a] / nDesg), backgroundColor: css('--c-social'), borderRadius: 4, borderSkipped: 'left', maxBarThickness: 22 }] }, options: optTop });
+  optTop.plugins.tooltip.callbacks = { label: c => {
+    const d = delta(top[c.dataIndex]);
+    const lin = [` ${fmtMin(c.raw)} al día`];
+    if (d != null && Math.abs(d) >= 1) lin.push(` ${d > 0 ? '▲' : '▼'} ${fmtMin(Math.abs(d))}/día frente al periodo anterior`);
+    return lin; } };
+  if (top.length) charts.top = new Chart($('#g-top'), { type: 'bar', data: { labels: top, datasets: [{ data: top.map(a => totales[a] / nDesg), backgroundColor: css('--c-social'), borderRadius: 4, borderSkipped: 'left', maxBarThickness: 22 }] }, options: optTop });
+  const cambios = top.map(a => [a, delta(a)]).filter(([, d]) => d != null && Math.abs(d) >= 5);
+  $('#ley-top').innerHTML = !periodo ? '<span class="muted">Con «Todo» no hay periodo anterior con el que comparar.</span>'
+    : !previos.length ? `<span class="muted">Sin datos de los ${periodo} días anteriores para comparar.</span>`
+    : `<span class="muted">Frente a los ${periodo} días anteriores (${previos.length} con datos):</span>` + (cambios.length
+      ? cambios.map(([a, d]) => `<span class="${d > 0 ? 't-rojo' : 't-ok'}">${a} ${d > 0 ? '▲' : '▼'} ${fmtMin(Math.abs(d))}/día</span>`).join('')
+      : '<span class="muted">sin cambios de más de 5 min/día</span>');
 
   // 4. Mapa de calor
   pintarCalor(dias);
@@ -493,25 +542,47 @@ function pintarPeriodo() {
 function pintarCalor(dias) {
   const conHoras = dias.filter(d => d.horas);
   const heat = $('#heat'), tip = $('#tip');
-  if (!conHoras.length) { heat.innerHTML = '<p class="sub">Aún no hay días con el detalle por horas.</p>'; $('#heat-ley').innerHTML = ''; return; }
+  if (!conHoras.length) { heat.innerHTML = '<p class="sub">Aún no hay días con el detalle por horas.</p>'; $('#heat-ley').innerHTML = ''; $('#sub-calor').textContent = ''; return; }
   const N = NORMAS.noche;
+  const finde = NORMAS.dias_fin_de_semana || [6, 7];
   const cortes = [5, 10, 20, 30, 45, 60];
   const paso = m => m <= 0 ? 0 : (i => i === -1 ? 7 : i + 1)(cortes.findIndex(c => m <= c));
+  const desdeSi = mananaFinde => N ? (mananaFinde ? N.desde_antes_de_fin_de_semana : N.desde_antes_de_lectivo) : 99;
+  const esNoche = (h, desde) => N && (h < N.hasta || h + 1 > desde);
+
+  // Filas: un día cada una o, en periodos largos, la media de cada día de la semana
+  let filas;
+  const porDiaSemana = conHoras.length > CALOR_DESDE;
+  if (porDiaSemana) {
+    filas = [1, 2, 3, 4, 5, 6, 7].map(w => {
+      const ds = conHoras.filter(d => diaSemana(d.fecha) === w);
+      if (!ds.length) return null;
+      const horas = Array.from({ length: 24 }, (_, h) => ds.reduce((s, d) => s + (d.horas[h] || 0), 0) / ds.length);
+      return { lab: `${NOMBRE_DIA[w].slice(0, 3).toLowerCase()} (${ds.length})`, titulo: `media de ${ds.length} ${NOMBRE_DIA[w].toLowerCase()}${ds.length > 1 && !/s$/.test(NOMBRE_DIA[w]) ? 's' : ''}`,
+               horas, desde: desdeSi(finde.includes(w === 7 ? 1 : w + 1)) };
+    }).filter(Boolean);
+    $('#sub-calor').textContent = `Media de minutos por hora para cada día de la semana, en los ${conHoras.length} días con detalle por horas (entre paréntesis, cuántos días de cada). Con borde discontinuo, el horario nocturno.`;
+  } else {
+    filas = [...conHoras].reverse().map(d => {
+      const manana = evaluarDia({ fecha: sumarDias(d.fecha, 1) }, POR_FECHA, NORMAS).tipo;
+      return { lab: fechaCorta(d.fecha), titulo: fechaCorta(d.fecha), fecha: d.fecha, horas: d.horas, desde: desdeSi(manana !== 'lectivo') };
+    });
+    $('#sub-calor').textContent = 'Minutos por hora de cada día (pulsa la fecha para ver el día). Con borde discontinuo, el horario nocturno. Las horas se leen del gráfico del iPhone (aproximadas).';
+  }
+
   heat.style.gridTemplateColumns = `auto repeat(24, 1fr)`;
   let html = '<div></div>' + Array.from({ length: 24 }, (_, h) => `<div class="h">${h % 3 === 0 ? h : ''}</div>`).join('');
-  for (const d of [...conHoras].reverse()) {
-    const manana = evaluarDia({ fecha: sumarDias(d.fecha, 1) }, POR_FECHA, NORMAS).tipo;
-    const desde = N ? (manana === 'lectivo' ? N.desde_antes_de_lectivo : N.desde_antes_de_fin_de_semana) : 99;
-    html += `<div class="lab">${fechaCorta(d.fecha)}</div>`;
-    d.horas.forEach((m, h) => {
-      const noche = N && (h < N.hasta || h + 1 > desde);
-      html += `<div class="c${noche ? ' noche' : ''}" style="background:var(--seq-${Math.min(7, paso(m))})" data-t="${fechaCorta(d.fecha)} · ${h}:00–${h + 1}:00 · ${m ? fmtMin(m) : 'sin uso'}${noche ? ' · noche' : ''}"></div>`;
+  for (const f of filas) {
+    html += `<div class="lab"${f.fecha ? ` data-fecha="${f.fecha}" style="cursor:pointer;text-decoration:underline dotted"` : ''}>${f.lab}</div>`;
+    f.horas.forEach((m, h) => {
+      const noche = esNoche(h, f.desde);
+      html += `<div class="c${noche ? ' noche' : ''}" style="background:var(--seq-${Math.min(7, paso(m))})" data-t="${f.titulo} · ${h}:00–${h + 1}:00 · ${m >= 0.5 ? fmtMin(m) : 'sin uso'}${noche ? ' · noche' : ''}"></div>`;
     });
   }
   heat.innerHTML = html;
   heat.onmousemove = e => { const t = e.target.dataset?.t; if (!t) { tip.style.display = 'none'; return; } tip.textContent = t; tip.style.display = 'block'; tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; };
   heat.onmouseleave = () => tip.style.display = 'none';
-  heat.onclick = heat.onmousemove;
+  heat.onclick = e => { if (e.target.dataset?.fecha) return seleccionarDia(e.target.dataset.fecha, true); heat.onmousemove(e); };
   $('#heat-ley').innerHTML = 'Menos <b style="background:var(--seq-0)"></b>' + [1, 2, 3, 4, 5, 6, 7].map(i => `<b style="background:var(--seq-${i})"></b>`).join('') + ' Más (hasta 5 · 10 · 20 · 30 · 45 · 60 · más de 60 min)';
 }
 
