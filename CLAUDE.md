@@ -8,7 +8,7 @@ Cuando el usuario pase pantallazos de *Tiempo de uso* del iPhone (vista de un d�
 4. `git add docs/datos.enc && git commit -m "Datos AAAA-MM-DD" && git push`. La web se actualiza en 1-2 minutos.
 5. Resume al usuario en 2-3 líneas el día: total, semáforo y qué norma se ha pasado.
 
-Origen de los pantallazos: Google Drive del usuario (conector de Google Drive), carpeta «Uso móvil» (id `1lrRldnpUHqCeuox2KUzTIZgz0mJuHzD0`). Busca las imágenes con `parentId = '<id>'`, descárgalas y, tras publicar, muévelas a «Procesados» (id `15UjVC7aHUyp9dxFrIz6T3AzHXEApjrOD`). Si un día solo tiene un pantallazo, procésalo igual y avisa de lo que falta. También puede pegarlos directamente en el chat.
+Origen de los pantallazos: la carpeta «Uso móvil» de Google Drive, sincronizada en este equipo con Google Drive para ordenador en `G:\Mi unidad\Uso móvil\`. Lee las imágenes (.png, .jpg, .jpeg) que estén directamente en ella y, tras publicar, muévelas a `G:\Mi unidad\Uso móvil\Procesados\` (`Move-Item -LiteralPath`). No uses el conector de Google Drive para moverlas: desde el 24-nov-2026 solo puede modificar archivos creados por él. Si la unidad G: no está, dilo. Si un día solo tiene un pantallazo, procésalo igual y avisa de lo que falta. También puede pegarlos directamente en el chat.
 
 Reiniciar (empezar de cero): `node tools/reiniciar.mjs` (copia de seguridad en `privado/copia-*.json`, vacía los días y publica). Solo si el usuario lo pide; detalles en README.md.
 
