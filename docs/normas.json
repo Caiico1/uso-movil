@@ -5,7 +5,7 @@
     "total": { "lectivo": 180, "fin_de_semana": 240 },
     "categorias": {},
     "apps": {
-      "Instagram": { "lectivo": 60, "fin_de_semana": 90 },
+      "Instagram": { "lectivo": 90, "fin_de_semana": 120 },
       "TikTok": { "lectivo": 30, "fin_de_semana": 60 },
       "WhatsApp": { "lectivo": 60, "fin_de_semana": 90 }
     }
